@@ -1,5 +1,10 @@
 # cargo-duplicated
 
+[![Crates.io](https://img.shields.io/crates/v/cargo-duplicated.svg)](https://crates.io/crates/cargo-duplicated)
+[![Github All Releases](https://img.shields.io/github/downloads/bircni/cargo-duplicated/total.svg)](https://github.com/bircni/cargo-duplicated/releases)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/bircni/cargo-duplicated/blob/main/LICENSE)
+[![CI](https://github.com/bircni/cargo-duplicated/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bircni/cargo-duplicated/actions/workflows/ci.yml)
+
 A command-line tool to detect duplicated Rust code blocks with configurable thresholds.
 
 ## Features

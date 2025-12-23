@@ -341,3 +341,70 @@ fn dedupe_key(snippet: &str, length: usize, locations: &[Location]) -> String {
     }
     key
 }
+
+#[cfg(test)]
+mod internal_tests {
+    use super::*;
+    use globset::GlobSetBuilder;
+    use std::path::Path;
+
+    fn make_norm_lines(lines: &[&str]) -> Vec<NormLine> {
+        lines
+            .iter()
+            .enumerate()
+            .map(|(idx, line)| NormLine {
+                norm: line.to_string(),
+                line_no: idx + 1,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn should_include_rejects_outside_root() {
+        let matcher = GlobSetBuilder::new().build().unwrap();
+        let root = Path::new("/tmp/root");
+        let path = Path::new("/tmp/other/file.rs");
+        assert!(!should_include(root, path, &matcher));
+    }
+
+    #[test]
+    fn can_extend_back_empty_group() {
+        let files: Vec<FileLines> = Vec::new();
+        let group: Vec<Occurrence> = Vec::new();
+        assert!(!can_extend_back(&files, &group));
+    }
+
+    #[test]
+    fn extend_forward_empty_group() {
+        let files: Vec<FileLines> = Vec::new();
+        let group: Vec<Occurrence> = Vec::new();
+        assert_eq!(extend_forward(&files, &group, 2), 0);
+    }
+
+    #[test]
+    fn extend_forward_stops_on_mismatch() {
+        let files = vec![
+            FileLines {
+                path: PathBuf::from("a.rs"),
+                lines: make_norm_lines(&["a", "b", "c"]),
+            },
+            FileLines {
+                path: PathBuf::from("b.rs"),
+                lines: make_norm_lines(&["a", "b", "d"]),
+            },
+        ];
+        let group = vec![
+            Occurrence {
+                file_idx: 0,
+                start_idx: 0,
+            },
+            Occurrence {
+                file_idx: 1,
+                start_idx: 0,
+            },
+        ];
+
+        let extra = extend_forward(&files, &group, 2);
+        assert_eq!(extra, 0);
+    }
+}

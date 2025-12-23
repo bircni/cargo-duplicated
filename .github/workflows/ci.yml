@@ -38,7 +38,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          
+
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo fmt
@@ -74,11 +74,3 @@ jobs:
         run: cargo binstall --no-confirm cargo-shear
 
       - run: cargo shear
-
-  cargo-deny:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-      - uses: EmbarkStudios/cargo-deny-action@v2
