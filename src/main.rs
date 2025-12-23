@@ -22,6 +22,17 @@ fn main() {
 
 fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
+    let result = run_with(cli)?;
+    print!("{}", result.output);
+    Ok(result.exit_code)
+}
+
+struct RunResult {
+    exit_code: i32,
+    output: String,
+}
+
+fn run_with(cli: Cli) -> anyhow::Result<RunResult> {
     let config_path = cli.config.as_deref();
     let mut config = Config::load(&cli.path, config_path)?;
     if cli.include_tests {
@@ -33,20 +44,11 @@ fn run() -> anyhow::Result<i32> {
 
     let report = scan_path(&cli.path, &config)?;
 
-    match cli.format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&report)?;
-            println!("{json}");
-        }
-        OutputFormat::Human => {
-            let text = render_human(&report)?;
-            print!("{text}");
-        }
-    }
+    let output = match cli.format {
+        OutputFormat::Json => serde_json::to_string_pretty(&report)?,
+        OutputFormat::Human => render_human(&report)?,
+    };
 
-    if report.duplicates.is_empty() {
-        Ok(0)
-    } else {
-        Ok(1)
-    }
+    let exit_code = i32::from(!report.duplicates.is_empty());
+    Ok(RunResult { exit_code, output })
 }

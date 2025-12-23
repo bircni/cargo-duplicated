@@ -150,3 +150,88 @@ fn helper() {
 
     assert!(report.duplicates.is_empty());
 }
+
+#[test]
+fn render_human_empty_report() {
+    let report = Report {
+        files_scanned: 0,
+        duplicates: Vec::new(),
+    };
+    let output = scanner::render_human(&report).unwrap();
+    assert_eq!(output, "No duplicates found.\n");
+}
+
+#[test]
+fn invalid_exclude_pattern_fails() {
+    let dir = TempDir::new().unwrap();
+    let content = r#"
+fn alpha() {
+    let x = 1;
+    let y = 2;
+    let z = x + y;
+    println!("{}", z);
+}
+"#;
+    write_file(&dir, "src/a.rs", content);
+    write_file(&dir, "src/b.rs", content);
+
+    let config = Config {
+        min_lines: 5,
+        min_occurrences: 2,
+        exclude: vec!["[".to_owned()],
+        include_tests: false,
+    };
+
+    let result = scanner::scan_path(dir.path(), &config);
+    result.unwrap_err();
+}
+
+#[test]
+fn finds_multiple_duplicate_blocks() {
+    let dir = TempDir::new().unwrap();
+    let content_a = r#"
+fn alpha() {
+    let x = 1;
+    let y = 2;
+    let z = x + y;
+    println!("{}", z);
+}
+"#;
+    let content_b = r#"
+fn beta() {
+    let a = 10;
+    let b = 20;
+    let c = a + b;
+    println!("{}", c);
+}
+"#;
+    write_file(
+        &dir,
+        "src/a.rs",
+        &format!("{content_a}\nlet sep = 1;\n{content_b}"),
+    );
+    write_file(
+        &dir,
+        "src/b.rs",
+        &format!("{content_a}\nlet sep = 2;\n{content_b}"),
+    );
+
+    let report = report_from(&dir, &Config::defaults());
+
+    assert!(report.duplicates.len() >= 2);
+}
+
+#[test]
+fn missing_root_with_excludes_fails() {
+    let dir = TempDir::new().unwrap();
+    let missing = dir.path().join("missing");
+    let config = Config {
+        min_lines: 5,
+        min_occurrences: 2,
+        exclude: vec!["src/**".to_owned()],
+        include_tests: false,
+    };
+
+    let result = scanner::scan_path(&missing, &config);
+    result.unwrap_err();
+}
