@@ -1,0 +1,35 @@
+---
+source: src/tests/cli_tests.rs
+expression: help_text
+---
+Find duplicated Rust code blocks
+
+Usage: cargo-duplicated [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Path to scan
+          
+          [default: .]
+
+Options:
+      --config <CONFIG>
+          Path to config file (defaults to <path>/dups.toml)
+
+      --format <FORMAT>
+          Output format
+          
+          [default: human]
+          [possible values: human, json]
+
+      --include-tests
+          Include files under tests/
+
+      --exclude <EXCLUDE>
+          Exclude path glob (relative to root). Can be repeated
+
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version
