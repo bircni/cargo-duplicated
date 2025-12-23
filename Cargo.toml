@@ -2,7 +2,7 @@
 name = "cargo-duplicated"
 description = "A tool to detect duplicated Rust code blocks."
 repository = "https://github.com/bircni/cargo-duplicated"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["bircni"]
 edition = "2024"
 license = "MIT"
