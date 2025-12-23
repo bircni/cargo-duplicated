@@ -20,6 +20,7 @@ toml = "0.9"
 walkdir = "2.5"
 
 [dev-dependencies]
+insta = { version = "1.45", features = ["json"] }
 tempfile = "3.23"
 
 [lints.rust]
