@@ -1,0 +1,15 @@
+# Example configuration for cargo-duplicated.
+# Copy this file to dups.toml at the repo root you want to scan.
+
+# Minimum number of normalized lines in a duplicated block.
+min_lines = 5
+
+# Minimum number of occurrences to report a duplicated block.
+min_occurrences = 2
+
+# Exclude paths using glob patterns (relative to the scan root).
+# Examples: "target/**", "src/generated/**", "**/fixtures/**"
+exclude = ["target/**", "src/generated/**"]
+
+# When false, any file containing #[test] or #[cfg(test)] is skipped.
+include_tests = false
