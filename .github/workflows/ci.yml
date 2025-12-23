@@ -74,3 +74,11 @@ jobs:
         run: cargo binstall --no-confirm cargo-shear
 
       - run: cargo shear
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: EmbarkStudios/cargo-deny-action@v2
