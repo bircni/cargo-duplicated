@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, OutputFormat};
 use config::Config;
@@ -21,7 +20,7 @@ fn main() {
     std::process::exit(exit_code);
 }
 
-fn run() -> Result<i32> {
+fn run() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     let config_path = cli.config.as_deref();
     let mut config = Config::load(&cli.path, config_path)?;
@@ -40,7 +39,7 @@ fn run() -> Result<i32> {
             println!("{json}");
         }
         OutputFormat::Human => {
-            let text = render_human(&report);
+            let text = render_human(&report)?;
             print!("{text}");
         }
     }

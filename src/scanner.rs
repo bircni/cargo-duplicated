@@ -1,8 +1,9 @@
 use crate::config::Config;
-use anyhow::{Context, Result};
+use anyhow::Context;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -46,7 +47,7 @@ struct Occurrence {
     start_idx: usize,
 }
 
-pub fn scan_path(root: &Path, config: &Config) -> Result<Report> {
+pub fn scan_path(root: &Path, config: &Config) -> anyhow::Result<Report> {
     let matcher = build_exclude_matcher(root, config)?;
     let files = collect_rs_files(root, &matcher);
     let mut file_lines = Vec::new();
@@ -68,34 +69,40 @@ pub fn scan_path(root: &Path, config: &Config) -> Result<Report> {
     })
 }
 
-pub fn render_human(report: &Report) -> String {
+pub fn render_human(report: &Report) -> anyhow::Result<String> {
     if report.duplicates.is_empty() {
-        return "No duplicates found.\n".to_string();
+        return Ok("No duplicates found.\n".to_owned());
     }
 
     let mut out = String::new();
-    out.push_str(&format!(
-        "Found {} duplicated blocks across {} files.\n",
+    writeln!(
+        out,
+        "Found {} duplicated blocks across {} files.",
         report.duplicates.len(),
         report.files_scanned
-    ));
+    )
+    .context("failed to write output")?;
     for (idx, block) in report.duplicates.iter().enumerate() {
-        out.push_str(&format!(
+        writeln!(
+            out,
             "\n{}. {} lines, {} occurrences\n",
             idx + 1,
             block.length,
             block.occurrences.len()
-        ));
+        )
+        .context("failed to write output")?;
         for loc in &block.occurrences {
-            out.push_str(&format!(
+            writeln!(
+                out,
                 "  - {}:{}-{}\n",
                 loc.file.display(),
                 loc.start_line,
                 loc.end_line
-            ));
+            )
+            .context("failed to write output")?;
         }
     }
-    out
+    Ok(out)
 }
 
 fn collect_rs_files(root: &Path, matcher: &GlobSet) -> Vec<PathBuf> {
@@ -119,7 +126,7 @@ fn collect_rs_files(root: &Path, matcher: &GlobSet) -> Vec<PathBuf> {
     files
 }
 
-fn build_exclude_matcher(root: &Path, config: &Config) -> Result<GlobSet> {
+fn build_exclude_matcher(root: &Path, config: &Config) -> anyhow::Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in &config.exclude {
         let glob =
@@ -134,9 +141,8 @@ fn build_exclude_matcher(root: &Path, config: &Config) -> Result<GlobSet> {
 }
 
 fn should_include(root: &Path, path: &Path, matcher: &GlobSet) -> bool {
-    let rel = match path.strip_prefix(root) {
-        Ok(rel) => rel,
-        Err(_) => return false,
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
     };
     if matcher.is_empty() {
         return true;
