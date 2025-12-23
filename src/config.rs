@@ -24,10 +24,7 @@ pub struct Config {
 
 impl Config {
     pub fn load(root: &Path, config_path: Option<&Path>) -> Result<Self> {
-        let config_path = match config_path {
-            Some(path) => path.to_path_buf(),
-            None => root.join("dups.toml"),
-        };
+        let config_path = config_path.map_or_else(|| root.join("dups.toml"), Path::to_path_buf);
         if !config_path.exists() {
             return Ok(Self::defaults());
         }
@@ -45,7 +42,7 @@ impl Config {
         })
     }
 
-    pub fn defaults() -> Self {
+    pub const fn defaults() -> Self {
         Self {
             min_lines: DEFAULT_MIN_LINES,
             min_occurrences: DEFAULT_MIN_OCCURRENCES,

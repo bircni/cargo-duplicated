@@ -13,8 +13,8 @@ fn write_file(dir: &TempDir, rel: &str, content: &str) {
     fs::write(path, content).unwrap();
 }
 
-fn report_from(dir: &TempDir, config: Config) -> Report {
-    scanner::scan_path(dir.path(), &config).unwrap()
+fn report_from(dir: &TempDir, config: &Config) -> Report {
+    scanner::scan_path(dir.path(), config).unwrap()
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn calc() {
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
 
-    let report = report_from(&dir, Config::defaults());
+    let report = report_from(&dir, &Config::defaults());
 
     assert!(!report.duplicates.is_empty());
     let block = &report.duplicates[0];
@@ -42,12 +42,12 @@ fn calc() {
 #[test]
 fn respects_config_thresholds() {
     let dir = TempDir::new().unwrap();
-    let content = r#"
+    let content = r"
 fn alpha() {
     let x = 1;
     let y = 2;
 }
-"#;
+";
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
     write_file(&dir, "src/c.rs", content);
@@ -58,7 +58,7 @@ fn alpha() {
         exclude: Vec::new(),
         include_tests: false,
     };
-    let report = report_from(&dir, config);
+    let report = report_from(&dir, &config);
 
     assert!(!report.duplicates.is_empty());
     assert_eq!(report.duplicates[0].occurrences.len(), 3);
@@ -67,15 +67,15 @@ fn alpha() {
 #[test]
 fn ignores_comment_only_blocks() {
     let dir = TempDir::new().unwrap();
-    let content = r#"
+    let content = r"
 // same
 // same
 // same
-"#;
+";
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
 
-    let report = report_from(&dir, Config::defaults());
+    let report = report_from(&dir, &Config::defaults());
 
     assert!(report.duplicates.is_empty());
 }
@@ -97,10 +97,10 @@ fn alpha() {
     let config = Config {
         min_lines: 5,
         min_occurrences: 2,
-        exclude: vec!["src/b.rs".to_string()],
+        exclude: vec!["src/b.rs".to_owned()],
         include_tests: false,
     };
-    let report = report_from(&dir, config);
+    let report = report_from(&dir, &config);
 
     assert!(report.duplicates.is_empty());
 }
@@ -126,7 +126,7 @@ fn beta() {
         exclude: Vec::new(),
         include_tests: true,
     };
-    let report = report_from(&dir, config);
+    let report = report_from(&dir, &config);
 
     assert!(!report.duplicates.is_empty());
 }
@@ -146,7 +146,7 @@ fn helper() {
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
 
-    let report = report_from(&dir, Config::defaults());
+    let report = report_from(&dir, &Config::defaults());
 
     assert!(report.duplicates.is_empty());
 }

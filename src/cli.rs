@@ -8,7 +8,11 @@ pub enum OutputFormat {
 }
 
 #[derive(Parser)]
-#[command(name = "cargo-duplicated", version, about = "Find duplicated Rust code blocks")]
+#[command(
+    name = "cargo-duplicated",
+    version,
+    about = "Find duplicated Rust code blocks"
+)]
 pub struct Cli {
     /// Path to scan
     #[arg(default_value = ".")]
