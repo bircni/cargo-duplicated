@@ -31,6 +31,11 @@ fn alpha() {
         format: OutputFormat::Human,
         include_tests: false,
         exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
@@ -54,6 +59,11 @@ fn alpha() {
         format: OutputFormat::Json,
         include_tests: false,
         exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
@@ -83,6 +93,11 @@ fn alpha() {
         format: OutputFormat::Human,
         include_tests: true,
         exclude: vec!["src/b.rs".to_owned()],
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
