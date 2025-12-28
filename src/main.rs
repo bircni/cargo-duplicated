@@ -115,16 +115,16 @@ fn run_with(cli: Cli) -> anyhow::Result<RunResult> {
         }
     };
 
-    // Handle diff mode
+    // Save baseline if requested (before diffing, to save the full report)
+    if let Some(save_path) = &cli.save_baseline {
+        let baseline = baseline::Baseline::from_report(report.clone());
+        baseline.save(save_path)?;
+    }
+
+    // Handle diff mode (filter report to only new duplicates)
     if let Some(baseline_path) = cli.diff {
         let baseline = baseline::Baseline::load(&baseline_path)?;
         report = baseline::diff_reports(&report, &baseline.report);
-    }
-
-    // Save baseline if requested
-    if let Some(save_path) = cli.save_baseline {
-        let baseline = baseline::Baseline::from_report(report.clone());
-        baseline.save(&save_path)?;
     }
 
     let output = match cli.format {

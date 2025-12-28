@@ -234,6 +234,7 @@ fn missing_root_with_excludes_fails() {
 }
 
 #[test]
+#[cfg(unix)]
 fn file_read_error_propagates() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;

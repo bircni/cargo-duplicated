@@ -189,6 +189,14 @@ pub fn normalize_expression(expr: &syn::Expr) -> String {
 }
 
 /// Group similar AST signatures and create duplicate reports.
+///
+/// Note: Currently only exact matches (similarity == 1.0) are detected via hash-based grouping.
+/// The `similarity_threshold` parameter is accepted for future extensibility but does not yet
+/// affect results. Fuzzy matching with lower thresholds would require implementing approximate
+/// matching algorithms (e.g., tree edit distance on AST structures).
+///
+/// However, exact matches are always reported regardless of the configured threshold, so users
+/// can still get useful results even when `similarity_threshold` < 1.0 is specified.
 fn group_similar_asts(
     occurrences: &[AstOccurrence],
     min_occurrences: usize,
@@ -210,10 +218,7 @@ fn group_similar_asts(
             continue;
         }
 
-        // Currently only exact matches (similarity == 1.0) are detected via hash-based grouping.
-        // Fuzzy matching with lower thresholds would require implementing approximate
-        // matching algorithms (e.g., edit distance on AST structure strings).
-        // For now, exact matches are reported regardless of the configured threshold.
+        // Report exact matches. These represent semantically identical code structures.
         let mut locations = Vec::new();
         for occ in group {
             let key = format!("{}:{}", occ.file.display(), occ.line);

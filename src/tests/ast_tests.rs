@@ -213,3 +213,69 @@ fn third() {
     result_original.unwrap();
     result_modified.unwrap();
 }
+
+#[test]
+fn test_ast_scanner_with_similarity_threshold_below_1() {
+    let dir = TempDir::new().unwrap();
+    let content1 = r"
+fn foo() {
+    let x = 1;
+    let y = 2;
+    return x + y;
+}
+";
+    let content2 = r"
+fn bar() {
+    let a = 1;
+    let b = 2;
+    return a + b;
+}
+";
+    write_file(&dir, "a.rs", content1);
+    write_file(&dir, "b.rs", content2);
+
+    let files = vec![dir.path().join("a.rs"), dir.path().join("b.rs")];
+
+    // When similarity threshold is 0.9 (< 1.0), exact matches should still be reported
+    let result = ast_scanner::find_semantic_duplicates(&files, 2, 0.9, false);
+
+    assert!(result.is_ok());
+    let duplicates = result.unwrap();
+    assert!(
+        !duplicates.is_empty(),
+        "Exact matches should be reported even when similarity threshold < 1.0"
+    );
+}
+
+#[test]
+fn test_ast_scanner_with_zero_similarity_threshold() {
+    let dir = TempDir::new().unwrap();
+    let content1 = r"
+fn foo() {
+    let x = 1;
+    let y = 2;
+    return x + y;
+}
+";
+    let content2 = r"
+fn bar() {
+    let a = 1;
+    let b = 2;
+    return a + b;
+}
+";
+    write_file(&dir, "a.rs", content1);
+    write_file(&dir, "b.rs", content2);
+
+    let files = vec![dir.path().join("a.rs"), dir.path().join("b.rs")];
+
+    // Even with threshold 0.0, exact matches should still be reported
+    let result = ast_scanner::find_semantic_duplicates(&files, 2, 0.0, false);
+
+    assert!(result.is_ok());
+    let duplicates = result.unwrap();
+    assert!(
+        !duplicates.is_empty(),
+        "Exact matches should be reported regardless of similarity threshold"
+    );
+}
