@@ -319,3 +319,52 @@ fn calc() {
     let token_report = report_from(&dir, &token_config);
     assert!(!token_report.duplicates.is_empty());
 }
+
+#[test]
+fn token_mode_skips_multi_line_block_comments() {
+    let dir = TempDir::new().unwrap();
+
+    // File a.rs: Code with unique pattern + multi-line comment with duplicate pattern
+    let content_a = r"
+/*
+ * Multi-line comment starts here
+ * let pattern_in_comment = 123;
+ * let another_in_comment = 456;
+ * let third_in_comment = 789;
+ * This should be ignored
+ */
+fn unique_function_a() {
+    let unique_a = 1;
+}
+";
+
+    // File b.rs: Real code with the pattern that was in comments in a.rs
+    let content_b = r"
+fn unique_function_b() {
+    let pattern_in_comment = 123;
+    let another_in_comment = 456;
+    let third_in_comment = 789;
+}
+";
+
+    write_file(&dir, "src/a.rs", content_a);
+    write_file(&dir, "src/b.rs", content_b);
+
+    let mut config = test_config();
+    config.detection_mode = DetectionMode::Token;
+    config.min_lines = 3; // Need 3+ lines to match the commented pattern
+    let report = report_from(&dir, &config);
+
+    // The commented code in a.rs should NOT match the real code in b.rs
+    // There should be NO duplicates found since the pattern only appears as comment in a.rs
+    for dup in &report.duplicates {
+        let has_a = dup.occurrences.iter().any(|o| o.file.ends_with("a.rs"));
+        let has_b = dup.occurrences.iter().any(|o| o.file.ends_with("b.rs"));
+
+        assert!(
+            !(has_a && has_b),
+            "Token mode incorrectly matched code in multi-line block comment with real code.\nDuplicate snippet: {:?}",
+            dup.snippet
+        );
+    }
+}

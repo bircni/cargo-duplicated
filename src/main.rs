@@ -1,7 +1,7 @@
 use clap::Parser;
 use cli::{Cli, OutputFormat};
 use config::Config;
-use scanner::{Report, render_human, scan_path};
+use scanner::{DuplicateBlock, Report, render_human, scan_path};
 
 mod ast_scanner;
 mod baseline;
@@ -101,16 +101,40 @@ fn run_with(cli: Cli) -> anyhow::Result<RunResult> {
             all_dups.extend(token_report.duplicates);
             all_dups.extend(semantic_dups);
 
-            // Deduplicate by creating unique keys
-            let mut seen_keys = std::collections::HashSet::new();
-            all_dups.retain(|dup| {
+            // Merge duplicates with the same signature, consolidating occurrences
+            let mut merged: std::collections::HashMap<String, DuplicateBlock> =
+                std::collections::HashMap::new();
+
+            for dup in all_dups {
                 let key = format!("{}:{:?}", dup.length, dup.snippet);
-                seen_keys.insert(key)
-            });
+                merged
+                    .entry(key)
+                    .and_modify(|existing| {
+                        // Merge occurrences from this duplicate into the existing one
+                        for occ in &dup.occurrences {
+                            // Avoid duplicating the same occurrence
+                            let occ_key = format!(
+                                "{}:{}:{}",
+                                occ.file.display(),
+                                occ.start_line,
+                                occ.end_line
+                            );
+                            if !existing.occurrences.iter().any(|e| {
+                                format!("{}:{}:{}", e.file.display(), e.start_line, e.end_line)
+                                    == occ_key
+                            }) {
+                                existing.occurrences.push(occ.clone());
+                            }
+                        }
+                    })
+                    .or_insert(dup);
+            }
+
+            let duplicates = merged.into_values().collect();
 
             Report {
                 files_scanned: text_report.files_scanned,
-                duplicates: all_dups,
+                duplicates,
             }
         }
     };

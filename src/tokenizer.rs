@@ -38,10 +38,15 @@ static ID_REGEX: LazyLock<Regex> =
 ///
 /// This allows detection of structurally similar code that differs only in naming or literal values.
 /// For example, `let x = 42;` and `let y = 99;` would both normalize to `let <ID> = <NUM>;`.
+///
+/// **Note**: This function operates on a single line and handles single-line block comments
+/// (e.g., `/* comment */` within a line). Multi-line block comments are handled at the
+/// file level by the caller (e.g., `read_token_normalized_lines` in scanner.rs) before
+/// lines are passed to this function.
 pub fn tokenize_line(line: &str) -> Option<String> {
     let trimmed = line.trim();
 
-    // Skip empty lines and comments
+    // Skip empty lines and line comments
     if trimmed.is_empty() || trimmed.starts_with("//") {
         return None;
     }
@@ -53,9 +58,26 @@ pub fn tokenize_line(line: &str) -> Option<String> {
 
     let mut normalized = String::new();
     let mut in_string = false;
+    let mut in_block_comment = false;
     let mut chars = trimmed.chars().peekable();
 
     while let Some(c) = chars.next() {
+        // Handle single-line block comments (/* ... */ within this line)
+        // Multi-line comments are stripped by the caller before reaching this function
+        if !in_string && c == '/' && chars.peek() == Some(&'*') {
+            in_block_comment = true;
+            chars.next(); // consume '*'
+            continue;
+        }
+
+        if in_block_comment {
+            if c == '*' && chars.peek() == Some(&'/') {
+                in_block_comment = false;
+                chars.next(); // consume '/'
+            }
+            continue;
+        }
+
         match c {
             '"' => {
                 in_string = !in_string;
@@ -118,9 +140,13 @@ pub fn tokenize_line(line: &str) -> Option<String> {
                 (&normalized[..match_start], &normalized[after_match_start..])
             });
 
-            // Check if we're inside angle brackets
+            // Only preserve actual token placeholders (ID, NUM, STR, CHAR), not generic type parameters
             if before_match.ends_with('<') && after_match.starts_with('>') {
-                return word.to_owned();
+                // Check if this is one of our placeholder tokens
+                if matches!(word, "ID" | "NUM" | "STR" | "CHAR") {
+                    return word.to_owned();
+                }
+                // Otherwise, it's a generic type parameter and should be normalized
             }
 
             if KEYWORDS.contains(&word) {

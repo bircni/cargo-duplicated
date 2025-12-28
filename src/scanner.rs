@@ -221,10 +221,38 @@ fn read_normalized_lines(content: &str) -> Vec<NormLine> {
     lines
 }
 
+/// Read and normalize lines using token-based normalization.
+///
+/// This function handles multi-line block comments at the file level before passing
+/// individual lines to `tokenize_line`, ensuring that comment state is preserved across
+/// line boundaries.
 fn read_token_normalized_lines(content: &str) -> Vec<NormLine> {
     let mut lines = Vec::new();
+    let mut in_block_comment = false;
+
     for (idx, line) in content.lines().enumerate() {
-        if let Some(norm) = tokenizer::tokenize_line(line) {
+        // Handle block comments (same logic as read_normalized_lines)
+        let processed = if in_block_comment {
+            if let Some(end_pos) = line.find("*/") {
+                in_block_comment = false;
+                line[end_pos + 2..].to_string()
+            } else {
+                continue;
+            }
+        } else if let Some(start_pos) = line.find("/*") {
+            line[start_pos..].find("*/").map_or_else(
+                || {
+                    // Start of multi-line block comment
+                    in_block_comment = true;
+                    line[..start_pos].to_owned()
+                },
+                |end_pos| format!("{}{}", &line[..start_pos], &line[start_pos + end_pos + 2..]),
+            )
+        } else {
+            line.to_owned()
+        };
+
+        if let Some(norm) = tokenizer::tokenize_line(&processed) {
             lines.push(NormLine {
                 norm,
                 line_no: idx + 1,

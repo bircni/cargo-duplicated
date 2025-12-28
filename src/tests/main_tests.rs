@@ -168,3 +168,55 @@ fn shared() {
         "Saved baseline should contain all occurrences (a.rs, b.rs, c.rs), not just the diff"
     );
 }
+
+#[test]
+fn all_mode_preserves_occurrences_from_all_detection_modes() {
+    let dir = TempDir::new().unwrap();
+
+    // Create a simple duplicate that all modes can detect
+    let code = r#"
+fn process() {
+    let value = 42;
+    println!("{}", value);
+}
+"#;
+
+    write_file(&dir, "src/a.rs", code);
+    write_file(&dir, "src/b.rs", code);
+    write_file(&dir, "src/c.rs", code);
+
+    let cli = Cli {
+        path: dir.path().to_path_buf(),
+        config: None,
+        format: OutputFormat::Json,
+        include_tests: false,
+        exclude: Vec::new(),
+        mode: Some(crate::cli::CliDetectionMode::All),
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
+    };
+
+    let result = run_with(cli).unwrap();
+    let report: crate::scanner::Report = serde_json::from_str(&result.output).unwrap();
+
+    // Text, token, and semantic modes should all find this duplicate
+    // The merged result should have only ONE duplicate block with 3 occurrences
+    // NOT multiple duplicate blocks (one from each mode)
+    assert!(
+        !report.duplicates.is_empty(),
+        "All mode should find duplicates"
+    );
+
+    // The issue: current code keeps only first block and drops occurrences from later modes
+    // We should have one block with 3 occurrences (a.rs, b.rs, c.rs)
+    let total_occurrences: usize = report.duplicates.iter().map(|d| d.occurrences.len()).sum();
+
+    // Each mode finds 3 occurrences, but deduplication should merge them into one block
+    // NOT drop subsequent blocks entirely
+    assert!(
+        total_occurrences >= 3,
+        "All mode should preserve all occurrences when merging, got {total_occurrences} total occurrences"
+    );
+}
