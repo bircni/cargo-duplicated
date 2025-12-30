@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.2.0](https://github.com/bircni/cargo-duplicated/compare/0.1.0..0.2.0) - 2025-12-30
+
+### Features
+
+- add AST-based semantic duplicate detection and token normalization ([#3](https://github.com/bircni/cargo-duplicated/issues/3)) - ([3ff3252](https://github.com/bircni/cargo-duplicated/commit/3ff32527083ff80148b5fe6ec7183d3397278408)) - Nicolas
+
 ## [0.1.0] - 2025-12-23
 
 ### Continuous Integration
