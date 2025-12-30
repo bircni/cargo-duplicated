@@ -31,6 +31,11 @@ fn alpha() {
         format: OutputFormat::Human,
         include_tests: false,
         exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
@@ -54,6 +59,11 @@ fn alpha() {
         format: OutputFormat::Json,
         include_tests: false,
         exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
@@ -83,9 +93,130 @@ fn alpha() {
         format: OutputFormat::Human,
         include_tests: true,
         exclude: vec!["src/b.rs".to_owned()],
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
     };
     let result = run_with(cli).unwrap();
 
     assert_eq!(result.exit_code, 0);
     assert!(result.output.contains("No duplicates found"));
+}
+
+#[test]
+fn save_baseline_with_diff_saves_full_report() {
+    let dir = TempDir::new().unwrap();
+    let content = r#"
+fn shared() {
+    let x = 1;
+    let y = 2;
+    let z = x + y;
+    println!("{}", z);
+}
+"#;
+    write_file(&dir, "src/a.rs", content);
+    write_file(&dir, "src/b.rs", content);
+
+    // Create a baseline with the initial duplicates
+    let baseline_path = dir.path().join("baseline.json");
+    let save_baseline_path = dir.path().join("new_baseline.json");
+
+    // First run: create baseline
+    let cli_first = Cli {
+        path: dir.path().to_path_buf(),
+        config: None,
+        format: OutputFormat::Json,
+        include_tests: false,
+        exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: None,
+        save_baseline: Some(baseline_path.clone()),
+        similarity: None,
+    };
+    run_with(cli_first).unwrap();
+
+    // Add a new duplicate file
+    write_file(&dir, "src/c.rs", content);
+
+    // Second run: diff against baseline and save new baseline
+    let cli_second = Cli {
+        path: dir.path().to_path_buf(),
+        config: None,
+        format: OutputFormat::Json,
+        include_tests: false,
+        exclude: Vec::new(),
+        mode: None,
+        max_memory: None,
+        diff: Some(baseline_path),
+        save_baseline: Some(save_baseline_path.clone()),
+        similarity: None,
+    };
+    run_with(cli_second).unwrap();
+
+    // Load the saved baseline and verify it contains ALL occurrences, not just the diff
+    let baseline_content = fs::read_to_string(&save_baseline_path).unwrap();
+    let baseline: crate::baseline::Baseline = serde_json::from_str(&baseline_content).unwrap();
+
+    // The saved baseline should have 3 occurrences (a.rs, b.rs, c.rs), not just the new one (c.rs)
+    assert_eq!(baseline.report.duplicates.len(), 1);
+    assert_eq!(
+        baseline.report.duplicates[0].occurrences.len(),
+        3,
+        "Saved baseline should contain all occurrences (a.rs, b.rs, c.rs), not just the diff"
+    );
+}
+
+#[test]
+fn all_mode_preserves_occurrences_from_all_detection_modes() {
+    let dir = TempDir::new().unwrap();
+
+    // Create a simple duplicate that all modes can detect
+    let code = r#"
+fn process() {
+    let value = 42;
+    println!("{}", value);
+}
+"#;
+
+    write_file(&dir, "src/a.rs", code);
+    write_file(&dir, "src/b.rs", code);
+    write_file(&dir, "src/c.rs", code);
+
+    let cli = Cli {
+        path: dir.path().to_path_buf(),
+        config: None,
+        format: OutputFormat::Json,
+        include_tests: false,
+        exclude: Vec::new(),
+        mode: Some(crate::cli::CliDetectionMode::All),
+        max_memory: None,
+        diff: None,
+        save_baseline: None,
+        similarity: None,
+    };
+
+    let result = run_with(cli).unwrap();
+    let report: crate::scanner::Report = serde_json::from_str(&result.output).unwrap();
+
+    // Text, token, and semantic modes should all find this duplicate
+    // The merged result should have only ONE duplicate block with 3 occurrences
+    // NOT multiple duplicate blocks (one from each mode)
+    assert!(
+        !report.duplicates.is_empty(),
+        "All mode should find duplicates"
+    );
+
+    // The issue: current code keeps only first block and drops occurrences from later modes
+    // We should have one block with 3 occurrences (a.rs, b.rs, c.rs)
+    let total_occurrences: usize = report.duplicates.iter().map(|d| d.occurrences.len()).sum();
+
+    // Each mode finds 3 occurrences, but deduplication should merge them into one block
+    // NOT drop subsequent blocks entirely
+    assert!(
+        total_occurrences >= 3,
+        "All mode should preserve all occurrences when merging, got {total_occurrences} total occurrences"
+    );
 }

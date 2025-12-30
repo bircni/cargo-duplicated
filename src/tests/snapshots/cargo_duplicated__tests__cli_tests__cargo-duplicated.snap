@@ -28,6 +28,23 @@ Options:
       --exclude <EXCLUDE>
           Exclude path glob (relative to root). Can be repeated
 
+      --mode <MODE>
+          Detection mode: text (exact), token (structural), semantic (AST), or all
+          
+          [possible values: text, token, semantic, all]
+
+      --max-memory <MAX_MEMORY>
+          Maximum memory usage in MB (default: 2048)
+
+      --diff <DIFF>
+          Compare against baseline file and report only new duplicates
+
+      --save-baseline <SAVE_BASELINE>
+          Save current results as baseline for future diff
+
+      --similarity <SIMILARITY>
+          Similarity threshold for semantic mode (0.0-1.0, default: 1.0)
+
   -h, --help
           Print help
 

@@ -1,5 +1,5 @@
 use crate::{
-    config::Config,
+    config::{Config, DetectionMode},
     scanner::{self, Report},
 };
 use std::fs;
@@ -15,6 +15,20 @@ fn write_file(dir: &TempDir, rel: &str, content: &str) {
 
 fn report_from(dir: &TempDir, config: &Config) -> Report {
     scanner::scan_path(dir.path(), config).unwrap()
+}
+
+fn test_config() -> Config {
+    Config {
+        min_lines: 3,
+        min_occurrences: 2,
+        exclude: Vec::new(),
+        include_tests: false,
+        detection_mode: DetectionMode::Text,
+        max_memory_mb: 2048,
+        ignore_patterns: Vec::new(),
+        similarity_threshold: 1.0,
+        baseline_path: None,
+    }
 }
 
 #[test]
@@ -52,12 +66,9 @@ fn alpha() {
     write_file(&dir, "src/b.rs", content);
     write_file(&dir, "src/c.rs", content);
 
-    let config = Config {
-        min_lines: 3,
-        min_occurrences: 3,
-        exclude: Vec::new(),
-        include_tests: false,
-    };
+    let mut config = test_config();
+    config.min_lines = 3;
+    config.min_occurrences = 3;
     let report = report_from(&dir, &config);
 
     assert!(!report.duplicates.is_empty());
@@ -94,12 +105,9 @@ fn alpha() {
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
 
-    let config = Config {
-        min_lines: 5,
-        min_occurrences: 2,
-        exclude: vec!["src/b.rs".to_owned()],
-        include_tests: false,
-    };
+    let mut config = test_config();
+    config.min_lines = 5;
+    config.exclude = vec!["src/b.rs".to_owned()];
     let report = report_from(&dir, &config);
 
     assert!(report.duplicates.is_empty());
@@ -120,12 +128,8 @@ fn beta() {
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "tests/b.rs", content);
 
-    let config = Config {
-        min_lines: 5,
-        min_occurrences: 2,
-        exclude: Vec::new(),
-        include_tests: true,
-    };
+    let mut config = test_config();
+    config.include_tests = true;
     let report = report_from(&dir, &config);
 
     assert!(!report.duplicates.is_empty());
@@ -175,12 +179,9 @@ fn alpha() {
     write_file(&dir, "src/a.rs", content);
     write_file(&dir, "src/b.rs", content);
 
-    let config = Config {
-        min_lines: 5,
-        min_occurrences: 2,
-        exclude: vec!["[".to_owned()],
-        include_tests: false,
-    };
+    let mut config = test_config();
+    config.min_lines = 5;
+    config.exclude = vec!["[".to_owned()];
 
     let result = scanner::scan_path(dir.path(), &config);
     result.unwrap_err();
@@ -225,13 +226,145 @@ fn beta() {
 fn missing_root_with_excludes_fails() {
     let dir = TempDir::new().unwrap();
     let missing = dir.path().join("missing");
-    let config = Config {
-        min_lines: 5,
-        min_occurrences: 2,
-        exclude: vec!["src/**".to_owned()],
-        include_tests: false,
-    };
+    let mut config = test_config();
+    config.exclude = vec!["src/ignored/**".to_owned()];
 
     let result = scanner::scan_path(&missing, &config);
     result.unwrap_err();
+}
+
+#[test]
+#[cfg(unix)]
+fn file_read_error_propagates() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new().unwrap();
+    let content = "fn test() {}";
+    write_file(&dir, "src/test.rs", content);
+
+    // Make the file unreadable (Unix only)
+    let file_path = dir.path().join("src/test.rs");
+    let mut perms = fs::metadata(&file_path).unwrap().permissions();
+    perms.set_mode(0o000);
+    fs::set_permissions(&file_path, perms).unwrap();
+
+    let config = test_config();
+    let result = scanner::scan_path(dir.path(), &config);
+
+    // Restore permissions for cleanup
+    let mut perms = fs::metadata(&file_path).unwrap().permissions();
+    perms.set_mode(0o644);
+    let _ = fs::set_permissions(&file_path, perms);
+
+    // Should propagate the error, not silently skip
+    result.unwrap_err();
+}
+
+#[test]
+fn token_mode_normalizes_identifiers() {
+    let dir = TempDir::new().unwrap();
+    let content1 = r"
+fn calc() {
+    let foo = 42;
+    let bar = 99;
+    return foo + bar;
+}
+";
+    let content2 = r"
+fn compute() {
+    let alpha = 42;
+    let beta = 99;
+    return alpha + beta;
+}
+";
+    write_file(&dir, "src/a.rs", content1);
+    write_file(&dir, "src/b.rs", content2);
+
+    let mut config = test_config();
+    config.detection_mode = DetectionMode::Token;
+    let report = report_from(&dir, &config);
+
+    // Token mode should find these as duplicates despite different names
+    assert!(!report.duplicates.is_empty());
+}
+
+#[test]
+fn token_mode_different_from_text_mode() {
+    let dir = TempDir::new().unwrap();
+    let content1 = r"
+fn calc() {
+    let x = 42;
+    let y = 99;
+}
+";
+    let content2 = r"
+fn calc() {
+    let a = 42;
+    let b = 99;
+}
+";
+    write_file(&dir, "src/a.rs", content1);
+    write_file(&dir, "src/b.rs", content2);
+
+    // Text mode should NOT find duplicates
+    let mut text_config = test_config();
+    text_config.detection_mode = DetectionMode::Text;
+    let text_report = report_from(&dir, &text_config);
+    assert!(text_report.duplicates.is_empty());
+
+    // Token mode SHOULD find duplicates
+    let mut token_config = test_config();
+    token_config.detection_mode = DetectionMode::Token;
+    let token_report = report_from(&dir, &token_config);
+    assert!(!token_report.duplicates.is_empty());
+}
+
+#[test]
+fn token_mode_skips_multi_line_block_comments() {
+    let dir = TempDir::new().unwrap();
+
+    // File a.rs: Code with unique pattern + multi-line comment with duplicate pattern
+    let content_a = r"
+/*
+ * Multi-line comment starts here
+ * let pattern_in_comment = 123;
+ * let another_in_comment = 456;
+ * let third_in_comment = 789;
+ * This should be ignored
+ */
+fn unique_function_a() {
+    let unique_a = 1;
+}
+";
+
+    // File b.rs: Real code with the pattern that was in comments in a.rs
+    let content_b = r"
+fn unique_function_b() {
+    let pattern_in_comment = 123;
+    let another_in_comment = 456;
+    let third_in_comment = 789;
+}
+";
+
+    write_file(&dir, "src/a.rs", content_a);
+    write_file(&dir, "src/b.rs", content_b);
+
+    let mut config = test_config();
+    config.detection_mode = DetectionMode::Token;
+    config.min_lines = 3; // Need 3+ lines to match the commented pattern
+    let report = report_from(&dir, &config);
+
+    // The commented code in a.rs should NOT match the real code in b.rs
+    // There should be NO duplicates found since the pattern only appears as comment in a.rs
+    for dup in &report.duplicates {
+        let has_a = dup.occurrences.iter().any(|o| o.file.ends_with("a.rs"));
+        let has_b = dup.occurrences.iter().any(|o| o.file.ends_with("b.rs"));
+
+        assert!(
+            !(has_a && has_b),
+            "Token mode incorrectly matched code in multi-line block comment with real code.\nDuplicate snippet: {:?}",
+            dup.snippet
+        );
+    }
 }

@@ -13,3 +13,25 @@ exclude = ["target/**", "src/generated/**"]
 
 # When false, any file containing #[test] or #[cfg(test)] is skipped.
 include_tests = false
+
+# Detection mode: "text" (exact), "token" (structural), "semantic" (AST), or "all"
+# - text: Fast exact text matching (default)
+# - token: Structural matching with identifier/literal normalization
+# - semantic: AST-based semantic analysis (slowest, most thorough)
+# - all: Run all modes and merge results
+detection_mode = "text"
+
+# Maximum memory usage in MB (helps prevent OOM on very large codebases)
+max_memory_mb = 2048
+
+# Patterns to ignore during normalization (e.g., license headers)
+ignore_patterns = [
+    "Copyright",
+    "Licensed under",
+]
+
+# Similarity threshold for semantic mode (0.0-1.0, where 1.0 = exact match)
+similarity_threshold = 1.0
+
+# Path to baseline file for incremental scanning (optional)
+# baseline_path = ".cargo-duplicated-baseline.json"

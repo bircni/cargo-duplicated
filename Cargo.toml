@@ -18,10 +18,18 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.9"
 walkdir = "2.5"
+syn = { version = "2.0", features = ["full", "extra-traits", "visit", "parsing"] }
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
+rayon = "1.10"
+rustc-hash = "2.1"
+regex = "1.11"
 
 [dev-dependencies]
 insta = { version = "1.45", features = ["json"] }
 tempfile = "3.23"
+
+[package.metadata.cargo-shear]
+ignored = ["proc-macro2"]
 
 [lints.rust]
 unsafe_code = "deny"

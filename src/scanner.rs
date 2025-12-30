@@ -1,7 +1,10 @@
 use crate::config::Config;
+use crate::tokenizer;
 use anyhow::Context;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde::Serialize;
+use rayon::prelude::*;
+use rustc_hash::FxHasher;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::fs;
@@ -21,21 +24,21 @@ struct FileLines {
     lines: Vec<NormLine>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
     pub file: PathBuf,
     pub start_line: usize,
     pub end_line: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuplicateBlock {
     pub length: usize,
     pub occurrences: Vec<Location>,
     pub snippet: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Report {
     pub files_scanned: usize,
     pub duplicates: Vec<DuplicateBlock>,
@@ -50,15 +53,41 @@ struct Occurrence {
 pub fn scan_path(root: &Path, config: &Config) -> anyhow::Result<Report> {
     let matcher = build_exclude_matcher(root, config)?;
     let files = collect_rs_files(root, &matcher);
+
+    // Use parallel processing for file reading
+    let results: Vec<anyhow::Result<Option<FileLines>>> = files
+        .par_iter()
+        .map(|path| {
+            let content = fs::read_to_string(path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+
+            if !config.include_tests && contains_test_markers(&content) {
+                return Ok(None);
+            }
+
+            // Choose normalization strategy based on detection mode
+            let lines = match config.detection_mode {
+                crate::config::DetectionMode::Token => read_token_normalized_lines(&content),
+                crate::config::DetectionMode::Text
+                | crate::config::DetectionMode::Semantic
+                | crate::config::DetectionMode::All => read_normalized_lines(&content),
+            };
+
+            Ok(Some(FileLines {
+                path: path.clone(),
+                lines,
+            }))
+        })
+        .collect();
+
+    // Collect file_lines and propagate first error if any
     let mut file_lines = Vec::new();
-    for path in files {
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        if !config.include_tests && contains_test_markers(&content) {
-            continue;
+    for result in results {
+        match result {
+            Ok(Some(fl)) => file_lines.push(fl),
+            Ok(None) => {} // Test file, skip
+            Err(e) => return Err(e),
         }
-        let lines = read_normalized_lines(&content);
-        file_lines.push(FileLines { path, lines });
     }
 
     let duplicates = find_duplicates(&file_lines, config.min_lines, config.min_occurrences);
@@ -126,6 +155,12 @@ fn collect_rs_files(root: &Path, matcher: &GlobSet) -> Vec<PathBuf> {
     files
 }
 
+/// Public wrapper for collecting Rust files (used by AST scanner)
+pub fn collect_rs_files_public(root: &Path, config: &Config) -> anyhow::Result<Vec<PathBuf>> {
+    let matcher = build_exclude_matcher(root, config)?;
+    Ok(collect_rs_files(root, &matcher))
+}
+
 fn build_exclude_matcher(root: &Path, config: &Config) -> anyhow::Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in &config.exclude {
@@ -152,8 +187,72 @@ fn should_include(root: &Path, path: &Path, matcher: &GlobSet) -> bool {
 
 fn read_normalized_lines(content: &str) -> Vec<NormLine> {
     let mut lines = Vec::new();
+    let mut in_block_comment = false;
+
     for (idx, line) in content.lines().enumerate() {
-        if let Some(norm) = normalize_line(line) {
+        // Handle block comments
+        let processed = if in_block_comment {
+            if let Some(end_pos) = line.find("*/") {
+                in_block_comment = false;
+                line[end_pos + 2..].to_string()
+            } else {
+                continue;
+            }
+        } else if let Some(start_pos) = line.find("/*") {
+            line[start_pos..].find("*/").map_or_else(
+                || {
+                    // Start of multi-line block comment
+                    in_block_comment = true;
+                    line[..start_pos].to_owned()
+                },
+                |end_pos| format!("{}{}", &line[..start_pos], &line[start_pos + end_pos + 2..]),
+            )
+        } else {
+            line.to_owned()
+        };
+
+        if let Some(norm) = normalize_line(&processed) {
+            lines.push(NormLine {
+                norm,
+                line_no: idx + 1,
+            });
+        }
+    }
+    lines
+}
+
+/// Read and normalize lines using token-based normalization.
+///
+/// This function handles multi-line block comments at the file level before passing
+/// individual lines to `tokenize_line`, ensuring that comment state is preserved across
+/// line boundaries.
+fn read_token_normalized_lines(content: &str) -> Vec<NormLine> {
+    let mut lines = Vec::new();
+    let mut in_block_comment = false;
+
+    for (idx, line) in content.lines().enumerate() {
+        // Handle block comments (same logic as read_normalized_lines)
+        let processed = if in_block_comment {
+            if let Some(end_pos) = line.find("*/") {
+                in_block_comment = false;
+                line[end_pos + 2..].to_string()
+            } else {
+                continue;
+            }
+        } else if let Some(start_pos) = line.find("/*") {
+            line[start_pos..].find("*/").map_or_else(
+                || {
+                    // Start of multi-line block comment
+                    in_block_comment = true;
+                    line[..start_pos].to_owned()
+                },
+                |end_pos| format!("{}{}", &line[..start_pos], &line[start_pos + end_pos + 2..]),
+            )
+        } else {
+            line.to_owned()
+        };
+
+        if let Some(norm) = tokenizer::tokenize_line(&processed) {
             lines.push(NormLine {
                 norm,
                 line_no: idx + 1,
@@ -178,12 +277,12 @@ fn normalize_line(line: &str) -> Option<String> {
     Some(normalized)
 }
 
-fn contains_test_markers(content: &str) -> bool {
+pub fn contains_test_markers(content: &str) -> bool {
     content.contains("#[test]") || content.contains("#[cfg(test)]")
 }
 
 fn hash_block(lines: &[NormLine]) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let mut hasher = FxHasher::default();
     for line in lines {
         line.norm.hash(&mut hasher);
     }
