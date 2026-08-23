@@ -240,7 +240,7 @@ fn group_similar_asts(
         }
     }
 
-    duplicates.sort_by(|a, b| b.occurrences.len().cmp(&a.occurrences.len()));
+    duplicates.sort_by_key(|a| std::cmp::Reverse(a.occurrences.len()));
     duplicates
 }
 

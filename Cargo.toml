@@ -12,21 +12,21 @@ exclude = ["src/tests/*"]
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 globset = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.9"
+toml = "1.1"
 walkdir = "2.5"
-syn = { version = "2.0", features = ["full", "extra-traits", "visit", "parsing"] }
+syn = { version = "3.0", features = ["full", "extra-traits", "visit", "parsing"] }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
-rayon = "1.10"
+rayon = "1.12"
 rustc-hash = "2.1"
-regex = "1.11"
+regex = "1.13"
 
 [dev-dependencies]
-insta = { version = "1.45", features = ["json"] }
-tempfile = "3.23"
+insta = { version = "1.48", features = ["json"] }
+tempfile = "3.27"
 
 [package.metadata.cargo-shear]
 ignored = ["proc-macro2"]
